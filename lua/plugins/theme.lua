@@ -1,0 +1,1 @@
+/home/tgroshon/.config/omarchy/current/theme/neovim.lua
