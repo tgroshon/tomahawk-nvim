@@ -1,6 +1,8 @@
 return {
   "folke/snacks.nvim",
   keys = {
+    { "<leader>sp", LazyVim.pick("live_grep"), desc = "Grep Project" },
+    { "<leader>pf", LazyVim.pick("files"), desc = "Find Files (Root Dir)" },
     {
       "<leader>bb",
       function()

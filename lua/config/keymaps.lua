@@ -7,7 +7,3 @@ vim.keymap.del("n", "<leader>bp")
 vim.keymap.set("n", "<leader>bp", "<cmd>bprevious<cr>")
 vim.keymap.set("n", "<leader>bn", "<cmd>bnext<cr>")
 vim.keymap.set("n", "<leader>fs", "<cmd>w<cr><esc>", { desc = "Save File" })
-
--- set in separate place
--- vim.keymap.del("n", "<leader>bb")
--- vim.keymap.set("n", "<leader>bb", "")
