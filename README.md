@@ -1,4 +1,5 @@
-# 💤 LazyVim
+# 💤 Tomahawk Neovim Config
 
-A starter template for [LazyVim](https://github.com/LazyVim/LazyVim).
-Refer to the [documentation](https://lazyvim.github.io/installation) to get started.
+Based on LazyVim with some Spacemacs influenced bindings.
+
+Refer to the [LazyVim documentation](https://lazyvim.github.io/installation) for additional configuration.
