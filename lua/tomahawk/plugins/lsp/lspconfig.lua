@@ -1,22 +1,30 @@
 return {
 	"neovim/nvim-lspconfig",
-	commit = "541f3a2781de481bb84883889e4d9f0904250a56",
-	event = { "BufReadPre", "BufNewFile" },
+	commit = "16286347bdba1333c7d124d9de9fe6630731b2b2",
+	-- Not lazy-loaded: mason.lua depends on this plugin so that mason-lspconfig can
+	-- enable installed servers, which pulls it in at startup anyway.
 	dependencies = {
-		{ "hrsh7th/cmp-nvim-lsp", commit = "39e2eda76828d88b773cc27a3f61d2ad782c922d" },
-		{ "antosha417/nvim-lsp-file-operations", config = true, commit = "92a673de7ecaa157dd230d0128def10beb56d103" },
-		{ "folke/neodev.nvim", opts = {}, commit = "46aa467dca16cf3dfe27098042402066d2ae242d" },
+		{ "hrsh7th/cmp-nvim-lsp", commit = "cbc7b02bb99fae35cb42f514762b89b5126651ef" },
+		{
+			"antosha417/nvim-lsp-file-operations",
+			config = true,
+			commit = "b9c795d3973e8eec22706af14959bc60c579e771",
+		},
+		-- Replaces the deprecated folke/neodev.nvim, which hooked lspconfig's old
+		-- `.setup()` path and is inert now that servers are configured with
+		-- vim.lsp.config.
+		{
+			"folke/lazydev.nvim",
+			commit = "ff2cbcba459b637ec3fd165a2be59b7bbaeedf0d",
+			ft = "lua",
+			opts = {
+				library = {
+					{ path = "${3rd}/luv/library", words = { "vim%.uv" } },
+				},
+			},
+		},
 	},
 	config = function()
-		-- import lspconfig plugin
-		local lspconfig = require("lspconfig")
-
-		-- import mason_lspconfig plugin
-		local mason_lspconfig = require("mason-lspconfig")
-
-		-- import cmp-nvim-lsp plugin
-		local cmp_nvim_lsp = require("cmp_nvim_lsp")
-
 		local keymap = vim.keymap -- for conciseness
 
 		vim.api.nvim_create_autocmd("LspAttach", {
@@ -55,10 +63,14 @@ return {
 				keymap.set("n", "<leader>el", "<cmd>Telescope diagnostics bufnr=0<CR>", opts) -- show  diagnostics for file
 
 				opts.desc = "Go to previous diagnostic"
-				keymap.set("n", "<leader>ep", vim.diagnostic.goto_prev, opts) -- jump to previous diagnostic in buffer
+				keymap.set("n", "<leader>ep", function()
+					vim.diagnostic.jump({ count = -1 })
+				end, opts) -- jump to previous diagnostic in buffer
 
 				opts.desc = "Go to next diagnostic"
-				keymap.set("n", "<leader>en", vim.diagnostic.goto_next, opts) -- jump to next diagnostic in buffer
+				keymap.set("n", "<leader>en", function()
+					vim.diagnostic.jump({ count = 1 })
+				end, opts) -- jump to next diagnostic in buffer
 
 				opts.desc = "Show line diagnostics"
 				keymap.set("n", "<leader>ee", vim.diagnostic.open_float, opts) -- show diagnostics for line
@@ -68,108 +80,86 @@ return {
 			end,
 		})
 
-		-- used to enable autocompletion (assign to every lsp server config)
-		local capabilities = cmp_nvim_lsp.default_capabilities()
+		-- Diagnostic symbols in the sign column (gutter). vim.fn.sign_define() with
+		-- DiagnosticSign* names is no longer how this is configured.
+		vim.diagnostic.config({
+			signs = {
+				text = {
+					[vim.diagnostic.severity.ERROR] = " ",
+					[vim.diagnostic.severity.WARN] = " ",
+					[vim.diagnostic.severity.HINT] = "󰠠 ",
+					[vim.diagnostic.severity.INFO] = " ",
+				},
+			},
+		})
 
-		-- Change the Diagnostic symbols in the sign column (gutter)
-		-- (not in youtube nvim video)
-		local signs = { Error = " ", Warn = " ", Hint = "󰠠 ", Info = " " }
-		for type, icon in pairs(signs) do
-			local hl = "DiagnosticSign" .. type
-			vim.fn.sign_define(hl, { text = icon, texthl = hl, numhl = "" })
-		end
+		-- Capabilities applied to every server, including Expert (enabled in
+		-- core/init.lua). This replaces mason-lspconfig's old default `setup_handlers`
+		-- entry; the "*" key is merged into every config vim.lsp resolves, and setting
+		-- it invalidates any config already resolved, so ordering does not matter.
+		local capabilities = vim.tbl_deep_extend(
+			"force",
+			require("cmp_nvim_lsp").default_capabilities(),
+			require("lsp-file-operations").default_capabilities()
+		)
 
-		mason_lspconfig.setup_handlers({
-			-- default handler for installed servers
-			function(server_name)
-				lspconfig[server_name].setup({
-					capabilities = capabilities,
-				})
-			end,
-			["elixirls"] = function()
-				-- Explicitly disabled - using Expert Elixir Language Server instead
-				-- See lua/tomahawk/core/init.lua for Expert config
-			end,
-			["ruby_lsp"] = function()
-				lspconfig["ruby_lsp"].setup({
-					capabilities = capabilities,
-					init_options = {
-						addonSettings = {
-							["Ruby LSP Rails"] = {
-								enablePendingMigrationsPrompt = false,
-							},
-						},
+		vim.lsp.config("*", { capabilities = capabilities })
+
+		-- Per-server overrides. Everything not listed here runs on nvim-lspconfig's
+		-- bundled defaults from its `lsp/<server>.lua` files.
+
+		vim.lsp.config("ruby_lsp", {
+			init_options = {
+				addonSettings = {
+					["Ruby LSP Rails"] = {
+						enablePendingMigrationsPrompt = false,
 					},
-				})
-			end,
-			["svelte"] = function()
-				-- configure svelte server
-				lspconfig["svelte"].setup({
-					capabilities = capabilities,
-					on_attach = function(client, bufnr)
-						vim.api.nvim_create_autocmd("BufWritePost", {
-							pattern = { "*.js", "*.ts" },
-							callback = function(ctx)
-								-- Here use ctx.match instead of ctx.file
-								client.notify("$/onDidChangeTsOrJsFile", { uri = ctx.match })
-							end,
-						})
+				},
+			},
+		})
+
+		vim.lsp.config("svelte", {
+			on_attach = function(client, _bufnr)
+				vim.api.nvim_create_autocmd("BufWritePost", {
+					pattern = { "*.js", "*.ts" },
+					callback = function(ctx)
+						-- Here use ctx.match instead of ctx.file
+						client:notify("$/onDidChangeTsOrJsFile", { uri = ctx.match })
 					end,
 				})
 			end,
-			["graphql"] = function()
-				-- configure graphql language server
-				lspconfig["graphql"].setup({
-					capabilities = capabilities,
-					filetypes = { "graphql", "gql", "svelte", "typescriptreact", "javascriptreact" },
-				})
-			end,
-			["pyright"] = function()
-				lspconfig["pyright"].setup({
-					capabilities = capabilities,
-					filetypes = { "python" },
-					settings = {
-						-- python = {
-						-- 	pythonPath = "/Users/davidhanks/.virtualenvs/MyEd/bin/python",
-						-- 	analysis = { "/Users/davidhanks/.virtualenvs/MyEd/lib/python3.13/site-packages" },
-						-- },
+		})
+
+		vim.lsp.config("graphql", {
+			filetypes = { "graphql", "gql", "svelte", "typescriptreact", "javascriptreact" },
+		})
+
+		vim.lsp.config("emmet_ls", {
+			filetypes = {
+				"html",
+				"typescriptreact",
+				"javascriptreact",
+				"css",
+				"heex",
+				"sass",
+				"scss",
+				"less",
+				"svelte",
+			},
+		})
+
+		vim.lsp.config("lua_ls", {
+			settings = {
+				Lua = {
+					-- make the language server recognize "vim" global
+					diagnostics = {
+						globals = { "vim" },
 					},
-				})
-			end,
-			["emmet_ls"] = function()
-				-- configure emmet language server
-				lspconfig["emmet_ls"].setup({
-					capabilities = capabilities,
-					filetypes = {
-						"html",
-						"typescriptreact",
-						"javascriptreact",
-						"css",
-						"heex",
-						"sass",
-						"scss",
-						"less",
-						"svelte",
+					completion = {
+						callSnippet = "Replace",
 					},
-				})
-			end,
-			["lua_ls"] = function()
-				-- configure lua server (with special settings)
-				lspconfig["lua_ls"].setup({
-					capabilities = capabilities,
-					settings = {
-						Lua = {
-							-- make the language server recognize "vim" global
-							diagnostics = {
-								globals = { "vim" },
-							},
-							completion = {
-								callSnippet = "Replace",
-							},
-						},
-					},
-				})
-			end,
+				},
+			},
 		})
 	end,
 }

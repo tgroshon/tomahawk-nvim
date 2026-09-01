@@ -46,6 +46,9 @@ return {
 			}),
 			-- sources for autocompletion
 			sources = cmp.config.sources({
+				-- group_index 0 makes lazydev's require()/module completions take
+				-- precedence over lua_ls's for Lua files
+				{ name = "lazydev", group_index = 0 },
 				{ name = "nvim_lsp" },
 				{ name = "luasnip" }, -- snippets
 				{ name = "buffer" }, -- text within current buffer

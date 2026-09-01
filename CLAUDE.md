@@ -11,8 +11,8 @@ with a Spacemacs-style leader layer layered on top.
 ## Load order
 
 1. `init.lua` requires `tomahawk.core`, then `tomahawk.lazy`.
-2. `core/init.lua` loads `options.lua` and `keymaps.lua`, then configures the Expert
-   Elixir LSP and a FileType autocmd that starts treesitter for elixir/eelixir/heex.
+2. `core/init.lua` loads `options.lua` and `keymaps.lua`, then enables the Expert
+   Elixir LSP.
 3. `lazy.lua` bootstraps lazy.nvim and imports two specs: `tomahawk.plugins` and
    `tomahawk.plugins.lsp`.
 
@@ -36,17 +36,60 @@ Plugin-local keymaps live in the plugin's own `config` function rather than in
 Two files, plus one server configured outside Mason:
 
 - `plugins/lsp/mason.lua` — `ensure_installed` lists for mason-lspconfig (servers) and
-  mason-tool-installer (formatters/linters).
-- `plugins/lsp/lspconfig.lua` — `setup_handlers()`: a default handler applying
-  cmp capabilities to every installed server, plus per-server overrides. LSP keybinds
-  are set in an `LspAttach` autocmd, so they exist only on attached buffers.
-- `core/init.lua` — the Expert Elixir server, configured with the native
-  `vim.lsp.config()` / `vim.lsp.enable()` API. `elixirls` is deliberately stubbed to a
-  no-op handler in `lspconfig.lua` so Mason does not start a competing Elixir server.
-  Do not "fix" that empty handler.
+  mason-tool-installer (formatters/linters), plus the `automatic_enable` exclusions.
+- `plugins/lsp/lspconfig.lua` — `vim.lsp.config("*", …)` applying cmp +
+  lsp-file-operations capabilities to every server, then one `vim.lsp.config(<name>, …)`
+  per server that needs non-default settings. LSP keybinds are set in an `LspAttach`
+  autocmd, so they exist only on attached buffers.
+- `core/init.lua` — `vim.lsp.enable("expert")` for the Expert Elixir server.
 
-To add a server: add it to `ensure_installed` in `mason.lua`, and add a handler in
-`setup_handlers()` only if it needs non-default settings.
+Everything runs on the native `vim.lsp.config()` / `vim.lsp.enable()` API. mason-lspconfig
+2.x removed `setup_handlers()`; it now calls `vim.lsp.enable()` itself for each installed
+server, and per-server settings are merged from three sources at `FileType` time — the
+`"*"` config, nvim-lspconfig's bundled `lsp/<server>.lua`, then our `vim.lsp.config(<name>)`
+call, in that order. Because resolution is deferred and setting `"*"` invalidates every
+cached config, the order these calls run in does not matter.
+
+`mason.lua` lists `neovim/nvim-lspconfig` as a dependency: mason-lspconfig needs the
+`lsp/` runtime directory on the runtimepath before it enables anything. That makes
+nvim-lspconfig load eagerly, so it deliberately has no `event =` trigger.
+
+Elixir is served by **Expert only**. `elixirls`, `lexical`, `nextls` and `expert` itself
+are all listed under `automatic_enable.exclude` in `mason.lua` so mason-lspconfig can
+never start a second Elixir server alongside Expert — do not remove that list. (It
+replaces the empty `setup_handlers` stubs the old config used for the same purpose.)
+Expert's binary is installed through mason-tool-installer (package `expert`) rather than
+mason-lspconfig's `ensure_installed`, for the same reason.
+
+Lua workspace types come from `lazydev.nvim`, which replaced the deprecated
+`neodev.nvim` — neodev hooked lspconfig's old `.setup()` path and is inert under
+`vim.lsp.config`.
+
+To add a server: add it to `ensure_installed` in `mason.lua`, and add a
+`vim.lsp.config(<name>, …)` call in `lspconfig.lua` only if it needs non-default
+settings.
+
+## Treesitter
+
+`plugins/treesitter.lua` tracks nvim-treesitter's `main` branch — a full, incompatible
+rewrite. `master` is frozen and only supports Nvim <= 0.11. Consequences worth knowing
+before editing that file:
+
+- It requires Nvim 0.12+, the `tree-sitter` CLI (>= 0.26.1, from your package manager,
+  **not** npm), `curl`, `tar` and a C compiler.
+- It cannot be lazy-loaded (`lazy = false`), and parsers must be rebuilt whenever the
+  plugin updates — hence `build = ":TSUpdate"`.
+- There is no `ensure_installed` option and no `require("nvim-treesitter.configs")`.
+  Parsers are installed with `require("nvim-treesitter").install({...})`, which is
+  asynchronous and no-ops for parsers already present.
+- Highlighting and indentation are Neovim features, not plugin options: a `FileType`
+  autocmd calls `vim.treesitter.start()` and sets `indentexpr` for any filetype with an
+  available parser. That single autocmd covers Elixir, which is why `core/init.lua` no
+  longer has its own.
+- `autotag` is no longer a nvim-treesitter option; `nvim-ts-autotag` has its own
+  `opts = {}` setup in the dependency list.
+- The rewrite dropped `incremental_selection`, so the old `<C-space>` expand /
+  `<BS>` shrink bindings are gone with no in-plugin replacement.
 
 ## Keymap layout
 
@@ -72,6 +115,12 @@ everything — match surrounding tab indentation when editing instead.
 
 ## Verifying changes
 
-No test suite. Validate with `nvim --headless "+qa"` to surface startup errors, then
-`:Lazy` for plugin state, `:Mason` for server installs, `:checkhealth`, and by
-exercising the affected keymaps.
+No test suite. This config runs under its own `NVIM_APPNAME`, so validate with
+`NVIM_APPNAME=tomahawk nvim --headless "+qa"` to surface startup errors, then `:Lazy`
+for plugin state, `:Mason` for server installs, `:checkhealth`, and by exercising the
+affected keymaps.
+
+After a nvim-treesitter update run `:TSUpdate` and confirm parsers still build. To check
+LSP wiring without a UI, open a file of the relevant type and inspect
+`vim.lsp.config[<name>]` (the fully merged config) and `vim.lsp._enabled_configs` (which
+servers are enabled at all — useful for confirming only `expert` is enabled for Elixir).
