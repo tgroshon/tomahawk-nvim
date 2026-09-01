@@ -61,7 +61,15 @@ return {
 			group = vim.api.nvim_create_augroup("TomahawkTreesitter", { clear = true }),
 			callback = function(ev)
 				local lang = vim.treesitter.language.get_lang(ev.match)
-				if not lang or not pcall(vim.treesitter.language.add, lang) then
+				if not lang then
+					return
+				end
+
+				-- language.add() does not raise when a parser is missing -- it returns
+				-- nil plus an error message -- so a bare pcall() here would let unparsed
+				-- filetypes (alpha, oil, ...) through and blow up inside start().
+				local ok, added = pcall(vim.treesitter.language.add, lang)
+				if not ok or not added then
 					return
 				end
 
