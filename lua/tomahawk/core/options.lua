@@ -1,3 +1,11 @@
+-- Route yanks through OSC 52 when this session may be remote (tmux/SSH/herdr),
+-- so copying inside Neovim reaches the machine the terminal is really on.
+require("tomahawk.core.remote_clipboard").setup()
+
+-- Format on save is opt-in, per buffer or globally -- see plugins/formatting.lua
+-- and <leader>tf. Carried over from the Omarchy config this replaced.
+vim.g.autoformat = false
+
 vim.cmd("let g:netrw_liststyle = 3")
 
 local opt = vim.opt

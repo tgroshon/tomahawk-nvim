@@ -4,6 +4,7 @@ return {
 	dependencies = { { "nvim-tree/nvim-web-devicons", commit = "19d257cf889f79f4022163c3fbb5e08639077bd8" } },
 	config = function()
 		local lualine = require("lualine")
+		local omarchy = require("tomahawk.core.omarchy")
 		local lazy_status = require("lazy.status") -- to configure lazy pending updates count
 
 		local colors = {
@@ -53,7 +54,10 @@ return {
 		-- configure lualine with modified theme
 		lualine.setup({
 			options = {
-				theme = my_lualine_theme,
+				-- Under Omarchy the colorscheme changes at runtime, so let lualine
+				-- derive its palette from it; the hand-rolled theme above is only
+				-- used off Omarchy, where the colorscheme is fixed.
+				theme = omarchy.is_available() and "auto" or my_lualine_theme,
 			},
 			sections = {
 				lualine_c = {

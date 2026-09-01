@@ -31,7 +31,15 @@ Plugin versions are pinned in `lazy-lock.json`.
 | `SPC g`   | Git (`gs` Neogit status, gitsigns hunk actions)            |
 | `SPC e`   | Errors / diagnostics (`ee` line, `el` list, `en`/`ep` cycle) |
 | `SPC m`   | Major mode / LSP (`mk` hover, `mr` rename, `mx` code action, `mp` format) |
-| `SPC t`   | Toggles (`tt` tree, `tn` numbers, `tw` wrap, `th` clear highlight) |
+| `SPC t`   | Toggles (`tt` tree, `tn` numbers, `tw` wrap, `tf` format on save, `th` clear highlight) |
 | `SPC T`   | Tabs (`Tc` new, `Td` close, `Tn`/`Tp` cycle)               |
 | `SPC q`   | Quit (`qq` prompt, `qQ` force, `qs` save and quit)         |
 | `SPC h`   | Harpoon menu · `SPC a` add file · `SPC 1-4` jump           |
+
+## Omarchy
+
+On an Omarchy system the colorscheme follows `omarchy theme set` live — no restart —
+and every stock theme is pre-installed. Elsewhere the config falls back to onedark.
+
+Yanks route through OSC 52 inside tmux/SSH so copying reaches the machine your terminal
+is actually on. Format on save is off by default; `SPC tf` turns it on for a buffer.

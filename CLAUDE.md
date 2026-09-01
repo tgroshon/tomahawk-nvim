@@ -91,6 +91,42 @@ before editing that file:
 - The rewrite dropped `incremental_selection`, so the old `<C-space>` expand /
   `<BS>` shrink bindings are gone with no in-plugin replacement.
 
+## Omarchy integration
+
+These machines all run Omarchy, and three pieces of this config exist to fit it.
+
+**Theming.** `core/omarchy.lua` reads the lazy.nvim spec Omarchy regenerates on every
+`omarchy theme set` (`~/.local/state/omarchy/current/theme/neovim.lua`, with the older
+`~/.config/omarchy/current/...` path also checked). That file always has the same shape:
+colorscheme plugin specs plus a `LazyVim/LazyVim` entry whose `opts.colorscheme` names
+the colorscheme. We read the name, drop the LazyVim entry, and hand the rest to
+lazy.nvim — so the system theme drives Neovim without this config knowing the theme
+list. `plugins/colorscheme.lua` loads the active theme at `priority = 1000` and adds a
+`dir`-based pseudo-plugin that applies the colorscheme and starts a `libuv` watch on the
+spec file for live switching. Off Omarchy the whole path is skipped and onedark loads
+instead — keep that fallback working.
+
+`plugins/omarchy-themes.lua` pre-installs (lazy, unloaded) every colorscheme the stock
+themes can name. lazy.nvim cannot clone a plugin mid-session, so without it a switch to
+an unvisited theme would need `:Lazy sync` and a restart. If a switch ever reports a
+missing colorscheme, Omarchy has added a stock theme: add its plugin to that list.
+
+There is a user template at `~/.config/omarchy/themed/neovim.lua.tpl` (outside this
+repo) that renders an aether.nvim spec with the theme's palette. **It only applies to
+themes that do not ship their own `neovim.lua`** — `omarchy-theme-set-templates` skips
+any output path that already exists, and most stock themes ship one. The reader above,
+not the template, is what makes theming work in general.
+
+**Clipboard.** `core/remote_clipboard.lua` is vendored verbatim from Omarchy's stock
+config, below a provenance header, so it can be diffed against upstream after an
+`omarchy update`. It only engages inside tmux/SSH/herdr, where it routes yanks through
+OSC 52. Re-sync it rather than editing it locally.
+
+**Format on save is opt-in.** `vim.g.autoformat = false` in `core/options.lua`, and
+conform's `format_on_save` is a function honouring `vim.b.autoformat` then
+`vim.g.autoformat`. `<leader>tf` toggles the buffer. This matches the Omarchy config
+this replaced; do not "restore" unconditional format-on-save.
+
 ## Keymap layout
 
 Leader is `<Space>`. Prefixes: `b` buffers, `f` files, `w` windows, `p` project/file
@@ -106,8 +142,8 @@ Always give a keymap a `desc` — which-key surfaces it.
 
 ## Formatting
 
-conform.nvim formats on save (`lsp_fallback`, 3s timeout); prettier for web filetypes,
-stylua for Lua. Manual format is `<leader>mp`.
+conform.nvim handles formatting; prettier for web filetypes, stylua for Lua. Manual
+format is `<leader>mp`. Format on save is off by default — see the Omarchy section.
 
 Note the mismatch: this repo's Lua is tab-indented (inherited from upstream) while
 `stylua.toml` specifies 2 spaces. Running stylua over the tree would reformat
@@ -115,8 +151,8 @@ everything — match surrounding tab indentation when editing instead.
 
 ## Verifying changes
 
-No test suite. This config runs under its own `NVIM_APPNAME`, so validate with
-`NVIM_APPNAME=tomahawk nvim --headless "+qa"` to surface startup errors, then `:Lazy`
+No test suite. This repo is symlinked to `~/.config/nvim`, so validate with
+`nvim --headless "+qa"` to surface startup errors, then `:Lazy`
 for plugin state, `:Mason` for server installs, `:checkhealth`, and by exercising the
 affected keymaps.
 
@@ -124,3 +160,7 @@ After a nvim-treesitter update run `:TSUpdate` and confirm parsers still build. 
 LSP wiring without a UI, open a file of the relevant type and inspect
 `vim.lsp.config[<name>]` (the fully merged config) and `vim.lsp._enabled_configs` (which
 servers are enabled at all — useful for confirming only `expert` is enabled for Elixir).
+
+To check the theme wiring without a UI:
+`nvim --headless -c 'lua print(vim.g.colors_name)' -c qa` should print the colorscheme
+matching `omarchy theme current`.
